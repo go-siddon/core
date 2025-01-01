@@ -11,15 +11,16 @@ import (
 func TestNewClient(t *testing.T) {
 	client := testcontainers.ContainerRequest{
 		Image:        "mongo:8.0",
-		ExposedPorts: []string{"27017/tcp", "27017:27017"},
+		ExposedPorts: []string{"27017/tcp"},
 	}
 	mongoClient, err := testcontainers.GenericContainer(context.Background(), testcontainers.GenericContainerRequest{
 		ContainerRequest: client,
 		Started:          true,
 	})
+	url, _ := mongoClient.Endpoint(context.Background(), "")
 
 	t.Run("Test Client Connection", func(t *testing.T) {
-		_, err := New("mongodb://localhost:27017", "test-db")
+		_, err := New("mongodb://"+url, "test-db")
 		if err != nil {
 			t.Errorf("Error: %v", err)
 		}

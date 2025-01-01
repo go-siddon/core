@@ -30,7 +30,7 @@
 // 	Phone uint   `db:"phone" attr:"required"`
 // }
 
-package database
+package core
 
 import (
 	"errors"

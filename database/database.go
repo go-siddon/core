@@ -14,9 +14,9 @@ type DatabaseAdapter struct {
 
 type Model[T any] interface {
 	Find() Find[T]
-	Save() Save[T]
-	Update() Update[T]
-	Delete() Delete[T]
+	Save() ModelSave[T]
+	Update() ModelUpdate[T]
+	Delete() ModelDelete[T]
 }
 
 type Find[T any] interface {
@@ -61,14 +61,5 @@ type ModelDelete[T any] interface {
 }
 
 type Delete[T any] interface {
-	Exec(ctx context.Context) error
-}
-
-type ModelIndex[T any] interface {
-	One() Index[T]
-	Many() Index[T]
-}
-
-type Index[T any] interface {
 	Exec(ctx context.Context) error
 }
