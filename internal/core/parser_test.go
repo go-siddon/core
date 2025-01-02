@@ -31,7 +31,7 @@ func Test_parser_Parse(t *testing.T) {
 					FieldValue: reflect.ValueOf(testOne).Field(0),
 					FieldType:  reflect.ValueOf(testOne).Type().Field(0).Type,
 					FieldName:  reflect.ValueOf(testOne).Type().Field(0).Name,
-					FieldDB:    "name",
+					FieldTag:   "name",
 				},
 			},
 			wantErr: false,

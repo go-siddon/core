@@ -75,7 +75,8 @@ type ParsedField struct {
 	FieldValue reflect.Value
 	FieldType  reflect.Type
 	FieldName  string
-	FieldDB    string
+	FieldTag   string
+	Children   []ParsedField
 }
 
 func (p *parser) Parse(obj interface{}) ([]ParsedField, error) {
@@ -101,8 +102,17 @@ func (p *parser) Parse(obj interface{}) ([]ParsedField, error) {
 		}
 
 		if def, ok := tag.Lookup(databaseTag); ok {
-			single.FieldDB = def
+			single.FieldTag = def
 		}
+
+		if field.Type.Kind() == reflect.Struct {
+			data, err := p.Parse(v.Field(i))
+			if err != nil {
+				return nil, errors.New("guess it didn't work")
+			}
+			single.Children = data
+		}
+
 		sliceOfParsed = append(sliceOfParsed, single)
 	}
 
@@ -116,7 +126,7 @@ func compareParserResponse(a, b []ParsedField) bool {
 
 	for i := range a {
 		if a[i].FieldName != b[i].FieldName ||
-			a[i].FieldDB != b[i].FieldDB ||
+			a[i].FieldTag != b[i].FieldTag ||
 			!reflect.DeepEqual(a[i].FieldAttrs, b[i].FieldAttrs) ||
 			!reflect.DeepEqual(a[i].FieldValue.Interface(), b[i].FieldValue.Interface()) {
 			return false

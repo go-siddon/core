@@ -32,13 +32,13 @@ type FindMany[T any] interface {
 }
 
 type ModelSave[T any] interface {
-	One() Exec[T]
-	Many() Exec[T]
+	One(data T) Exec[T]
+	Many(data ...T) Exec[T]
 }
 
 type ModelUpdate[T any] interface {
-	One() Exec[T]  //will contain the id to match
-	Many() Exec[T] //will contain the id to match
+	One(data T) Exec[T]     //will contain the id to match
+	Many(data ...T) Exec[T] //will contain the id to match
 }
 
 type ModelDelete[T any] interface {

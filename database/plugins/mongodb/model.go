@@ -2,8 +2,10 @@ package mongodb
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-siddon/core/database"
+	"github.com/go-siddon/core/internal/core"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -16,11 +18,26 @@ type Model[T any] struct {
 
 // RegisterModel takes a connection to the mongo database, the name of the collection as well as the Model.
 // It returns the interface that enables communication to the mongodb collection on behalf of the registered model
-func RegisterModel[T any](db *Mongo, collection string, model T) database.Model[T] {
-	return &Model[T]{
-		client: db.client.Collection(collection),
-		model:  model,
+func RegisterModel[T any](db *Mongo, collection string, model T) (database.Model[T], error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+	client := db.client.Collection(collection)
+	parsed, err := core.New().Parse(model)
+	if err != nil {
+		return nil, err
 	}
+	indexes, err := getIndexes(parsed...)
+	if err != nil {
+		return nil, err
+	}
+	_, err = client.Indexes().CreateMany(ctx, indexes)
+	if err != nil {
+		return nil, err
+	}
+	return &Model[T]{
+		client: client,
+		model:  model,
+	}, nil
 }
 
 type modelFind[T any] struct {
@@ -129,10 +146,10 @@ func (mo *Model[T]) Save() database.ModelSave[T] {
 
 type saveOne[T any] struct {
 	client   *mongo.Collection
-	document T
+	document bson.D
 }
 
-func (ms *modelSave[T]) One() database.Exec[T] {
+func (ms *modelSave[T]) One(data T) database.Exec[T] {
 	return &saveOne[T]{
 		client: ms.client,
 	}
@@ -151,7 +168,7 @@ type saveMany[T any] struct {
 	document bson.D
 }
 
-func (ms *modelSave[T]) Many() database.Exec[T] {
+func (ms *modelSave[T]) Many(data ...T) database.Exec[T] {
 	return &saveMany[T]{
 		client: ms.client,
 	}
@@ -179,7 +196,7 @@ type updateOne[T any] struct {
 	document bson.D
 }
 
-func (mu *modelUpdate[T]) One() database.Exec[T] {
+func (mu *modelUpdate[T]) One(data T) database.Exec[T] {
 	return &updateOne[T]{
 		client: mu.client,
 	}
@@ -198,7 +215,7 @@ type updateMany[T any] struct {
 	document bson.D
 }
 
-func (mu *modelUpdate[T]) Many() database.Exec[T] {
+func (mu *modelUpdate[T]) Many(data ...T) database.Exec[T] {
 	return &updateMany[T]{
 		client: mu.client,
 	}
