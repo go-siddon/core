@@ -10,26 +10,29 @@ import (
 )
 
 type Model[T any] struct {
-	collection *mongo.Collection
-	model      T
+	client *mongo.Collection
+	model  T
 }
 
 // RegisterModel takes a connection to the mongo database, the name of the collection as well as the Model.
 // It returns the interface that enables communication to the mongodb collection on behalf of the registered model
 func RegisterModel[T any](db *Mongo, collection string, model T) database.Model[T] {
 	return &Model[T]{
-		collection: db.client.Collection(collection),
-		model:      model,
+		client: db.client.Collection(collection),
+		model:  model,
 	}
 }
 
 type modelFind[T any] struct {
 	client *mongo.Collection
+	filter bson.D
 }
 
-func (mo *Model[T]) Find() database.Find[T] {
+func (mo *Model[T]) Find(filter ...database.Params) database.Find[T] {
+	fil := convertParamsToBson(filter...)
 	return &modelFind[T]{
-		client: mo.collection,
+		client: mo.client,
+		filter: fil,
 	}
 }
 
@@ -43,10 +46,12 @@ type findOne[T any] struct {
 func (mf *modelFind[T]) One() database.FindOne[T] {
 	return &findOne[T]{
 		client: mf.client,
+		filter: mf.filter,
 	}
 }
 
-func (fo *findOne[T]) Sort() database.FindOne[T] {
+func (fo *findOne[T]) Sort(sortkeys ...database.SortParams) database.FindOne[T] {
+	fo.sort = convertSortParamsToBson(sortkeys...)
 	return fo
 }
 func (fo *findOne[T]) Column() database.FindOne[T] {
@@ -74,13 +79,20 @@ type findMany[T any] struct {
 func (mf *modelFind[T]) Many() database.FindMany[T] {
 	return &findMany[T]{
 		client: mf.client,
+		filter: mf.filter,
 	}
 }
 
-func (fm *findMany[T]) Sort() database.FindMany[T] {
+func (fm *findMany[T]) Sort(sortkey ...database.SortParams) database.FindMany[T] {
+	fm.sort = convertSortParamsToBson(sortkey...)
 	return fm
 }
-func (fm *findMany[T]) Limit() database.FindMany[T] {
+func (fm *findMany[T]) Limit(limit int64) database.FindMany[T] {
+	fm.limit = limit
+	return fm
+}
+func (fm *findMany[T]) Skip(skip int64) database.FindMany[T] {
+	fm.skip = skip
 	return fm
 }
 func (fm *findMany[T]) Column() database.FindMany[T] {
@@ -105,81 +117,141 @@ func (fm *findMany[T]) Exec(ctx context.Context) ([]*T, error) {
 	return res, nil
 }
 
-type modelSave[T any] struct{}
+type modelSave[T any] struct {
+	client *mongo.Collection
+}
 
 func (mo *Model[T]) Save() database.ModelSave[T] {
-	return &modelSave[T]{}
+	return &modelSave[T]{
+		client: mo.client,
+	}
 }
 
-type saveOne[T any] struct{}
+type saveOne[T any] struct {
+	client   *mongo.Collection
+	document T
+}
 
-func (ms *modelSave[T]) One() database.Save[T] {
-	return &saveOne[T]{}
+func (ms *modelSave[T]) One() database.Exec[T] {
+	return &saveOne[T]{
+		client: ms.client,
+	}
 }
 func (so *saveOne[T]) Exec(ctx context.Context) error {
+
+	if _, err := so.client.InsertOne(ctx, nil); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-type saveMany[T any] struct{}
+type saveMany[T any] struct {
+	client   *mongo.Collection
+	document bson.D
+}
 
-func (mf *modelSave[T]) Many() database.Save[T] {
-	return &saveMany[T]{}
+func (ms *modelSave[T]) Many() database.Exec[T] {
+	return &saveMany[T]{
+		client: ms.client,
+	}
 }
 func (sm *saveMany[T]) Exec(ctx context.Context) error {
+	if _, err := sm.client.InsertMany(ctx, nil); err != nil {
+		return err
+	}
 	return nil
 }
 
-type modelUpdate[T any] struct{}
-
-func (mo *Model[T]) Update() database.ModelUpdate[T] {
-	return &modelUpdate[T]{}
+type modelUpdate[T any] struct {
+	client *mongo.Collection
 }
 
-type updateOne[T any] struct{}
+func (mo *Model[T]) Update(filter ...database.Params) database.ModelUpdate[T] {
+	return &modelUpdate[T]{
+		client: mo.client,
+	}
+}
 
-func (mu *modelUpdate[T]) One() database.Update[T] {
-	return &updateOne[T]{}
+type updateOne[T any] struct {
+	client   *mongo.Collection
+	filter   bson.D
+	document bson.D
 }
-func (uo *updateOne[T]) Body() database.Update[T] {
-	return uo
+
+func (mu *modelUpdate[T]) One() database.Exec[T] {
+	return &updateOne[T]{
+		client: mu.client,
+	}
 }
+
 func (uo *updateOne[T]) Exec(ctx context.Context) error {
+	if _, err := uo.client.UpdateOne(ctx, uo.filter, uo.document); err != nil {
+		return err
+	}
 	return nil
 }
 
-type updateMany[T any] struct{}
+type updateMany[T any] struct {
+	client   *mongo.Collection
+	filter   bson.D
+	document bson.D
+}
 
-func (mu *modelUpdate[T]) Many() database.Update[T] {
-	return &updateMany[T]{}
+func (mu *modelUpdate[T]) Many() database.Exec[T] {
+	return &updateMany[T]{
+		client: mu.client,
+	}
 }
-func (um *updateMany[T]) Body() database.Update[T] {
-	return um
-}
+
 func (um *updateMany[T]) Exec(ctx context.Context) error {
+	if _, err := um.client.UpdateMany(ctx, um.filter, um.document); err != nil {
+		return err
+	}
 	return nil
 }
 
-type modelDelete[T any] struct{}
-
-func (mo *Model[T]) Delete() database.ModelDelete[T] {
-	return &modelDelete[T]{}
+type modelDelete[T any] struct {
+	client *mongo.Collection
 }
 
-type deleteOne[T any] struct{}
+func (mo *Model[T]) Delete(filter ...database.Params) database.ModelDelete[T] {
+	return &modelDelete[T]{
+		client: mo.client,
+	}
+}
 
-func (md *modelDelete[T]) One() database.Delete[T] {
-	return &deleteOne[T]{}
+type deleteOne[T any] struct {
+	client *mongo.Collection
+	filter bson.D
+}
+
+func (md *modelDelete[T]) One() database.Exec[T] {
+	return &deleteOne[T]{
+		client: md.client,
+	}
 }
 func (do *deleteOne[T]) Exec(ctx context.Context) error {
+	if _, err := do.client.DeleteOne(ctx, do.filter); err != nil {
+		return err
+	}
 	return nil
 }
 
-type deleteMany[T any] struct{}
+type deleteMany[T any] struct {
+	client *mongo.Collection
+	filter bson.D
+}
 
-func (md *modelDelete[T]) Many() database.Delete[T] {
-	return &deleteMany[T]{}
+func (md *modelDelete[T]) Many() database.Exec[T] {
+	return &deleteMany[T]{
+		client: md.client,
+	}
 }
 
 func (dm *deleteMany[T]) Exec(ctx context.Context) error {
+	if _, err := dm.client.DeleteMany(ctx, dm.filter); err != nil {
+		return err
+	}
 	return nil
 }
